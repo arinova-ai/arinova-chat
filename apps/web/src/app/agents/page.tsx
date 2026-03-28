@@ -120,7 +120,7 @@ export default function AgentsPage() {
       </div>
 
       {/* Agent list */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:pb-4">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading...</div>
         ) : agents.length === 0 ? (

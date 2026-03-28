@@ -182,7 +182,7 @@ export default function AgentManagePage() {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:pb-4 space-y-4">
         {tab === "general" && (
           <>
             <div>
