@@ -73,6 +73,7 @@ export default function OfficialSettingsPage() {
         credentials: "include",
         body: formData,
       });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const data = await res.json();
       if (data.url) {
         setAvatarUrl(data.url);
@@ -94,6 +95,7 @@ export default function OfficialSettingsPage() {
         credentials: "include",
         body: formData,
       });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const data = await res.json();
       if (data.url) {
         setCoverUrl(data.url);
