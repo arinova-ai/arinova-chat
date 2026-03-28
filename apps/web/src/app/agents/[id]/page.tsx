@@ -144,7 +144,7 @@ export default function AgentManagePage() {
   if (!agent) return <div className="flex h-full items-center justify-center text-muted-foreground">Agent not found</div>;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
         <button type="button" onClick={() => router.back()} className="p-1 hover:bg-muted rounded">

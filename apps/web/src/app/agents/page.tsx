@@ -102,7 +102,7 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
         <Bot className="h-5 w-5 text-muted-foreground" />
