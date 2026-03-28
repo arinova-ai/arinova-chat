@@ -46,13 +46,11 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "official-auto-reply": MessageSquare,
   "official-knowledge": BookOpen,
   "official-subscribers": Users,
-  "official-settings": Settings,
   // Lounge account
   "lounge-dashboard": LayoutDashboard,
   "lounge-persona": Brain,
   "lounge-diary": BookHeart,
   "lounge-preview": Eye,
-  "lounge-settings": Settings,
   "lounge-fans": Users,
 };
 
@@ -113,14 +111,14 @@ export function IconRail() {
       if (pathname.includes("/auto-reply")) return "official-auto-reply";
       if (pathname.includes("/knowledge")) return "official-knowledge";
       if (pathname.includes("/subscribers")) return "official-subscribers";
-      if (pathname.includes("/settings")) return "official-settings";
+      if (pathname.includes("/settings")) return "settings";
     }
     if (pathname.startsWith("/lounge") && activeAccount?.type === "lounge") {
       if (pathname.includes("/dashboard")) return "lounge-dashboard";
       if (pathname.includes("/persona")) return "lounge-persona";
       if (pathname.includes("/diary")) return "lounge-diary";
       if (pathname.includes("/preview")) return "lounge-preview";
-      if (pathname.includes("/settings")) return "lounge-settings";
+      if (pathname.includes("/settings")) return "settings";
       if (pathname.includes("/fans")) return "lounge-fans";
     }
     return "chat";

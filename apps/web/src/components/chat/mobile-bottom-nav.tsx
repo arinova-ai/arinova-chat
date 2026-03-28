@@ -164,19 +164,25 @@ export function MobileBottomNav() {
             {sheetItems.map((item) => {
               const Icon = item.icon;
               return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setFanOpen(false);
-                    router.push(item.href);
-                  }}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl p-2 transition-colors hover:bg-muted/50 active:bg-muted/70"
-                  style={{ width: 76, height: 76 }}
-                >
-                  <Icon className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-[11px] font-medium text-foreground truncate max-w-full">{item.label}</span>
-                </button>
+                <div key={item.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFanOpen(false);
+                      router.push(item.href);
+                    }}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-xl p-2 transition-colors hover:bg-muted/50 active:bg-muted/70"
+                    style={{ width: 76, height: 76 }}
+                  >
+                    <Icon className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-foreground truncate max-w-full">{item.label}</span>
+                  </button>
+                  {item.id === "friends" && pendingRequestCount > 0 && (
+                    <span className="absolute top-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white pointer-events-none">
+                      {pendingRequestCount}
+                    </span>
+                  )}
+                </div>
               );
             })}
 

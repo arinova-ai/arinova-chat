@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Bot, ArrowLeft, Save, Key, RefreshCw, Copy, Trash2, Activity, Brain,
-  Shield, Sparkles, AlertTriangle,
+  Shield, Sparkles, AlertTriangle, Eye, EyeOff,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export default function AgentManagePage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showToken, setShowToken] = useState(false);
 
   const fetchAgent = useCallback(async () => {
     try {
@@ -93,7 +94,7 @@ export default function AgentManagePage() {
     try {
       await api(`/api/agents/${agentId}`, {
         method: "PUT",
-        body: JSON.stringify({ system_prompt: systemPrompt, welcome_message: welcomeMessage }),
+        body: JSON.stringify({ systemPrompt, welcomeMessage }),
       });
       addToast("System prompt updated");
     } catch { addToast("Failed to save"); }
@@ -105,7 +106,7 @@ export default function AgentManagePage() {
     try {
       await api(`/api/agents/${agentId}`, {
         method: "PUT",
-        body: JSON.stringify({ notifications_enabled: notificationsEnabled, is_public: isPublic }),
+        body: JSON.stringify({ notificationsEnabled, isPublic }),
       });
       addToast("Permissions updated");
     } catch { addToast("Failed to save"); }
@@ -113,6 +114,7 @@ export default function AgentManagePage() {
   };
 
   const regenerateToken = async () => {
+    if (!confirm("Regenerate token? All existing integrations using the current token will stop working.")) return;
     try {
       const data = await api<{ secretToken: string }>(`/api/agents/${agentId}/regenerate-token`, { method: "POST" });
       if (data?.secretToken) {
@@ -259,7 +261,14 @@ export default function AgentManagePage() {
             <div>
               <label className="text-sm font-medium">Bot Token</label>
               <div className="mt-1 flex gap-2">
-                <input value={agent.secretToken ?? "***"} readOnly className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono" />
+                <input
+                  value={showToken ? (agent.secretToken ?? "") : "ari_••••••••••••••••"}
+                  readOnly
+                  className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono"
+                />
+                <Button variant="outline" size="sm" onClick={() => setShowToken((v) => !v)} title={showToken ? "Hide" : "Reveal"}>
+                  {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </Button>
                 <Button variant="outline" size="sm" onClick={copyToken}>
                   <Copy className="h-3.5 w-3.5" />
                 </Button>

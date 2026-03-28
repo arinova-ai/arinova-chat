@@ -130,7 +130,7 @@ function AgentDetailContent() {
           <p className="text-lg font-semibold text-muted-foreground">
             Agent not found
           </p>
-          <Button variant="secondary" onClick={() => router.push("/agent-hub")}>
+          <Button variant="secondary" onClick={() => router.push("/skills")}>
             Back to Agent Hub
           </Button>
         </div>
@@ -148,7 +148,7 @@ function AgentDetailContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-4">
           <button
-            onClick={() => router.push("/agent-hub")}
+            onClick={() => router.push("/skills")}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

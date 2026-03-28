@@ -136,8 +136,8 @@ Note: The conversation owner can disable agent note access. If disabled, all not
 
       if (!hasUrl || !hasAgent) {
         api.logger.warn("[openclaw-arinova-ai] Not configured yet.");
-        api.logger.warn("[openclaw-arinova-ai] 1. Create a bot at https://chat.arinova.ai and copy the Bot Token from bot settings");
-        api.logger.warn("[openclaw-arinova-ai] 2. Run:  openclaw arinova-setup --token <bot-token> --api-url https://api.chat.arinova.ai");
+        api.logger.warn("[openclaw-arinova-ai] Run:  arinova setup-openclaw");
+        api.logger.warn("[openclaw-arinova-ai] Or manually: arinova auth login && arinova setup-openclaw");
       }
     });
 

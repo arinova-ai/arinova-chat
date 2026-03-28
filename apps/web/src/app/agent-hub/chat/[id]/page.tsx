@@ -212,7 +212,7 @@ function AgentHubChatContent() {
           </p>
           <Button
             variant="secondary"
-            onClick={() => router.push("/agent-hub")}
+            onClick={() => router.push("/skills")}
           >
             Back to Agent Hub
           </Button>

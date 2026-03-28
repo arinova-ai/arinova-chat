@@ -46,13 +46,13 @@ export default function AgentsPage() {
   };
 
   const deleteSelected = async () => {
-    for (const id of selected) {
-      try {
-        await api(`/api/agents/${id}`, { method: "DELETE" });
-      } catch { /* skip */ }
-    }
+    if (!confirm(`Delete ${selected.size} agent(s)? This cannot be undone.`)) return;
+    const results = await Promise.allSettled(
+      [...selected].map((id) => api(`/api/agents/${id}`, { method: "DELETE" })),
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
     setSelected(new Set());
-    addToast(`Deleted ${selected.size} agent(s)`);
+    addToast(`Deleted ${succeeded}/${results.length} agent(s)`);
     fetchAgents();
   };
 
@@ -157,7 +157,7 @@ export default function AgentsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => router.push(`/agent/${agent.id}`)}
+                    onClick={() => router.push(`/agent-hub/${agent.id}`)}
                     className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     title="Profile"
                   >

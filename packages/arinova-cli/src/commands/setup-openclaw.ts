@@ -103,7 +103,10 @@ export function registerSetupOpenclaw(program: Command): void {
           const raw = data as Record<string, unknown>;
           const list = raw.agents ?? data;
           if (Array.isArray(list)) {
-            remoteBots = list as RemoteAgent[];
+            // Filter to entries that have at least an id and name
+            remoteBots = (list as RemoteAgent[]).filter(
+              (b) => b.id && (b.name || b.agent_name),
+            );
           }
         } catch (err) {
           console.log("Warning: Could not fetch existing bots from Arinova. Will create new bots.");
