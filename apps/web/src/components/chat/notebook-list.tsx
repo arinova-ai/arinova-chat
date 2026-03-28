@@ -530,7 +530,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         >
                           <Pencil className="h-3 w-3" />
                         </span>
-                        {!nb.isDefault && (
+                        {notebooks.filter((x) => !x.archived).length > 1 && (
                           <span
                             role="button"
                             onClick={(e) => {
@@ -683,7 +683,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                       >
                         <Pencil className="h-3 w-3" /> {t("notebooks.rename")}
                       </button>
-                      {!nb.isDefault && (
+                      {notebooks.filter((x) => !x.archived).length > 1 && (
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
@@ -976,7 +976,7 @@ function NotebookNotes({
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
-                      {!nb.isDefault && (
+                      {notebooks.filter((x) => !x.archived).length > 1 && (
                         <button
                           type="button"
                           className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-red-400"

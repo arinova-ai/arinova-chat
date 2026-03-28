@@ -41,4 +41,27 @@ export function registerNoteCommands(program: Command): void {
       const { token, apiUrl } = getOpts(note);
       output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/notes/${opts.noteId}`, token }));
     });
+
+  // Notebook commands
+  const notebook = program.command("notebook").description("Notebook management");
+  notebook.command("list").action(async () => {
+    const { token, apiUrl } = getOpts(notebook);
+    output(await apiCall({ method: "GET", url: `${apiUrl}/api/v1/notebooks`, token }));
+  });
+  notebook.command("create").requiredOption("--name <name>", "Notebook name").action(async (opts: { name: string }) => {
+    const { token, apiUrl } = getOpts(notebook);
+    output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/notebooks`, token, body: { name: opts.name } }));
+  });
+  notebook.command("rename").requiredOption("--notebook-id <id>", "Notebook ID").requiredOption("--name <name>", "New name").action(async (opts: { notebookId: string; name: string }) => {
+    const { token, apiUrl } = getOpts(notebook);
+    output(await apiCall({ method: "PATCH", url: `${apiUrl}/api/v1/notebooks/${opts.notebookId}`, token, body: { name: opts.name } }));
+  });
+  notebook.command("archive").requiredOption("--notebook-id <id>", "Notebook ID").action(async (opts: { notebookId: string }) => {
+    const { token, apiUrl } = getOpts(notebook);
+    output(await apiCall({ method: "PATCH", url: `${apiUrl}/api/v1/notebooks/${opts.notebookId}`, token, body: { archived: true } }));
+  });
+  notebook.command("delete").requiredOption("--notebook-id <id>", "Notebook ID").description("Delete an archived notebook").action(async (opts: { notebookId: string }) => {
+    const { token, apiUrl } = getOpts(notebook);
+    output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/notebooks/${opts.notebookId}`, token }));
+  });
 }

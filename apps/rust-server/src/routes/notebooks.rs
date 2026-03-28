@@ -286,12 +286,20 @@ async fn update_notebook(
         _ => {}
     }
 
-    // Prevent archiving the default notebook
-    if let Some((_, true)) = &owner {
-        if body.archived == Some(true) {
+    // Prevent archiving the last non-archived notebook
+    if body.archived == Some(true) {
+        let active_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM notebooks WHERE owner_id = $1 AND COALESCE(archived, false) = false",
+        )
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if active_count <= 1 {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Cannot archive the default notebook"})),
+                Json(json!({"error": "Cannot archive the last notebook"})),
             )
                 .into_response();
         }
