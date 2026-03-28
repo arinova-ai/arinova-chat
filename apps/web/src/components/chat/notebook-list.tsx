@@ -19,6 +19,7 @@ import {
   Trash2,
   Loader2,
   FolderOpen,
+  RotateCcw,
   X,
   Users,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -936,84 +938,114 @@ function NotebookNotes({
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-w-[260px]">
+              <DropdownMenuContent align="start" className="max-w-[280px]">
+                {/* Active notebooks — each with Pencil + Archive icons */}
                 {notebooks.filter((nb) => !nb.archived).map((nb) => (
                   <DropdownMenuItem
                     key={nb.id}
                     onClick={() => onSwitchNotebook(nb)}
-                    className={cn("flex items-center gap-2", nb.id === notebook.id && "bg-accent")}
+                    className={cn("flex items-center justify-between gap-2", nb.id === notebook.id && "bg-accent")}
                   >
-                    <span className="truncate flex-1">
+                    <span className="truncate flex items-center gap-1.5">
                       {nb.name}
-                      {nb.isDefault && <span className="ml-1 text-[10px] text-muted-foreground">({t("notebooks.default")})</span>}
+                      {nb.isDefault && <span className="text-[10px] text-muted-foreground">({t("notebooks.default")})</span>}
+                      {nb.ownerUsername && nb.ownerId !== currentUserId && (
+                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">@{nb.ownerUsername}</span>
+                      )}
                     </span>
-                    {nb.ownerUsername && nb.ownerId !== currentUserId && (
-                      <span className="shrink-0 text-[10px] text-muted-foreground">@{nb.ownerUsername}</span>
-                    )}
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{nb.noteCount}</span>
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newName = prompt("Rename notebook:", nb.name);
+                          if (newName && newName.trim() && newName.trim() !== nb.name) {
+                            api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
+                              .then(() => onRefresh()).catch(() => {});
+                          }
+                        }}
+                        title="Rename"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      {!nb.isDefault && (
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-red-400"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+                              onRefresh();
+                              if (nb.id === notebook.id) {
+                                const available = notebooks.filter((x) => x.id !== nb.id && !x.archived);
+                                if (available.length > 0) onSwitchNotebook(available[0]);
+                              }
+                            } catch {}
+                          }}
+                          title="Archive"
+                        >
+                          <Archive className="h-3 w-3" />
+                        </button>
+                      )}
+                    </span>
                   </DropdownMenuItem>
                 ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => {
-                  const newName = prompt("Rename notebook:", notebook.name);
-                  if (newName && newName.trim() && newName.trim() !== notebook.name) {
-                    api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
-                      .then(() => onRefresh()).catch(() => {});
-                  }
-                }}>
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                  {t("notebooks.rename")}
-                </DropdownMenuItem>
-                {!notebook.isDefault && (
-                  <DropdownMenuItem onClick={async () => {
-                    try {
-                      await api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
-                      onRefresh();
-                      const available = notebooks.filter((nb) => nb.id !== notebook.id && !nb.archived);
-                      if (available.length > 0) onSwitchNotebook(available[0]);
-                    } catch {}
-                  }}>
-                    <Archive className="h-3.5 w-3.5 mr-1.5" />
-                    Archive
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onCreateNotebook}>
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                <DropdownMenuItem onClick={onCreateNotebook} className="gap-2">
+                  <Plus className="h-3.5 w-3.5" />
                   {t("notebooks.create")}
                 </DropdownMenuItem>
+                {/* Archived notebooks */}
+                {notebooks.filter((nb) => nb.archived).length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      Archived
+                    </DropdownMenuLabel>
+                    {notebooks.filter((nb) => nb.archived).map((nb) => (
+                      <DropdownMenuItem
+                        key={nb.id}
+                        className="flex items-center justify-between gap-2 opacity-60"
+                      >
+                        <span className="truncate">{nb.name}</span>
+                        <span className="flex shrink-0 items-center gap-0.5">
+                          <button
+                            type="button"
+                            className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ archived: false }) });
+                                onRefresh();
+                              } catch {}
+                            }}
+                            title="Unarchive"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-red-400"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm(`Delete "${nb.name}"? Notes will be moved to default notebook.`)) return;
+                              try {
+                                await api(`/api/notebooks/${nb.id}`, { method: "DELETE" });
+                                onRefresh();
+                              } catch {}
+                            }}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* Inline edit + archive */}
-            <button
-              type="button"
-              onClick={() => {
-                const newName = prompt("Rename notebook:", notebook.name);
-                if (newName && newName.trim() && newName.trim() !== notebook.name) {
-                  api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
-                    .then(() => onRefresh()).catch(() => {});
-                }
-              }}
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            {!notebook.isDefault && (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
-                    onRefresh();
-                    const available = notebooks.filter((nb) => nb.id !== notebook.id && !nb.archived);
-                    if (available.length > 0) onSwitchNotebook(available[0]);
-                  } catch {}
-                }}
-                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <Archive className="h-3 w-3" />
-              </button>
-            )}
             <div className="flex-1" />
 
             {/* Toolbar icons */}
