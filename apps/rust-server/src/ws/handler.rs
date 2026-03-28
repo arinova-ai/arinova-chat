@@ -2530,7 +2530,7 @@ pub(crate) async fn do_trigger_agent_response(
 
 
                                 // Spawn auto memory extraction — only for H2A with self-improve skill
-                                if conv_type == "h2a" || conv_type == "direct" {
+                                if conv_type == "h2a" {
                                     let has_self_improve = sqlx::query_as::<_, (bool,)>(
                                         r#"SELECT EXISTS(
                                             SELECT 1 FROM agent_skills ask

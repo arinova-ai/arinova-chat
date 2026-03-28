@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Plus, Trash2, MessageSquare, Settings2, User, Copy, Check } from "lucide-react";
+import { Bot, Plus, Trash2, MessageSquare, Settings2, Copy, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -156,7 +156,7 @@ export default function AgentsPage() {
         )}
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" />
-          Create Agent
+          Create
         </Button>
       </div>
 
@@ -197,23 +197,27 @@ export default function AgentsPage() {
                   {selected.has(agent.id) && <span className="text-xs">&#10003;</span>}
                 </button>
 
-                {/* Avatar */}
-                {agent.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={agent.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted shrink-0">
-                    <Bot className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                )}
-
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{agent.name}</p>
-                  {agent.description && (
-                    <p className="text-xs text-muted-foreground truncate">{agent.description}</p>
+                {/* Avatar + Name (clickable → profile) */}
+                <button
+                  type="button"
+                  onClick={() => router.push(`/agent-hub/${agent.id}`)}
+                  className="flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                >
+                  {agent.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={agent.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted shrink-0">
+                      <Bot className="h-5 w-5 text-muted-foreground" />
+                    </div>
                   )}
-                </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{agent.name}</p>
+                    {agent.description && (
+                      <p className="text-xs text-muted-foreground truncate">{agent.description}</p>
+                    )}
+                  </div>
+                </button>
 
                 {/* Actions */}
                 <div className="flex gap-1 shrink-0">
@@ -238,14 +242,6 @@ export default function AgentsPage() {
                     title="Manage"
                   >
                     <Settings2 className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/agent-hub/${agent.id}`)}
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="Profile"
-                  >
-                    <User className="h-4 w-4 text-muted-foreground" />
                   </button>
                 </div>
               </div>
