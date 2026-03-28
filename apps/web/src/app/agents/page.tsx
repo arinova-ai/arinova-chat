@@ -200,7 +200,10 @@ export default function AgentsPage() {
                 {/* Avatar + Name (clickable → profile) */}
                 <button
                   type="button"
-                  onClick={() => router.push(`/agent-hub/${agent.id}`)}
+                  onClick={() => {
+                    if (agent.source === "listing") router.push(`/agent-hub/${agent.id}`);
+                    else router.push(`/agents/${agent.id}`);
+                  }}
                   className="flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
                 >
                   {agent.avatarUrl ? (
